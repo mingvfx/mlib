@@ -1,7 +1,7 @@
 {
 	"name":"Houdini",
 	"version":2,
-	"houdini.version":"20.5.332",
+	"houdini.version":"21.0.440",
 	"symbol":"",
 	"contexts":[
 		{
