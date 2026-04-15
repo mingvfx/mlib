@@ -21,7 +21,7 @@ MlibScript.MlibCreateGeo()
 from imp import reload
 reload(MlibScript)
 
-MlibScript.MlibCreateNullObjm()
+MlibScript.mlib_create_null_objm()
 ]]></script>
   </tool>
 
