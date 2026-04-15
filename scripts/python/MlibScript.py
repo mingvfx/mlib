@@ -11,126 +11,107 @@ def MlibCreateShotSetup():
     obj_level = hou.node("/obj")
     mlibshotsetup = obj_level.createNode("Mlib_ShotSetup")
         
-def MlibCreateNullObjm():
-    for n in hou.selectedItems():
-        root = n.parent().path()
-        if n.networkItemType() == hou.networkItemType.Node:
-            if n.type().name() != "null":
-                # create null 
-                null = hou.node(root).createNode('null',"Out_" + "{0}".format(n.name()))
-                
-                # Setting node position
-                selNodePos = n.position()
-                null.setPosition(hou.Vector2(selNodePos[0], selNodePos[1]-1))
-        
-                # set null shape and color
-                null.setUserData("nodeshape", "squared") 
-                null.setColor(n.color())
-                
-                # set youtput / pin dot output
-                for conn in n.outputConnections():
-                    out_node = conn.outputNode()
-                    out_item = conn.outputItem()
-                    merge_input_index = conn.inputIndex()
-                    if out_node:
-                        #print(f"  - Output Node: {out_node.path()}")
-                        out_node.setInput(merge_input_index, null)
-                        
-                    else:
-                        if isinstance(out_item, hou.NetworkDot):
-                            #print(f"  - Output Pin Dot: {out_item.path()}")
-                            merge_input_index = conn.inputIndex()
-                            out_item.setInput(merge_input_index, null)
-                            
-    
-                # set input 
-                null.setInput(0, n)
-    
-    
-                # set selected
-                n.setSelected(False)
-                null.setSelected(True)
-                
-                # set display flag
-                #n.setRenderFlag(True)
-                #n.setRenderFlag(False)
-                #null.setRenderFlag(True)
-                #null.setDisplayFlag(True)
 
-                #n.setDisplayFlag(False)
-                
-            else:            
-                objm = hou.node(root).createNode('object_merge',"OBJM_" + "{0}".format(n.name()))
+def _create_out_null(parent, item, port_index, total_ports):
+    """
+    内部辅助函数：专门用来生成 Null 节点并处理连线
+    """
+    suffix = f"_{port_index}" if total_ports > 1 else ""
     
-                # Setting node position
-                selNodePos = n.position()
-                objm.setPosition(hou.Vector2(selNodePos[0], selNodePos[1]-1))
-                
-                objm.parm("objpath1").set(n.path())
-                objm.parm("xformtype").set(1)
-                
-                # set null shape and color
-                shape = n.userData("nodeshape")
-                if(shape == None):
-                    shape = "rect"
-                objm.setUserData("nodeshape", shape) 
-                objm.setColor(n.color())
-        
-                # set selected
-                n.setSelected(False)
-                objm.setSelected(True)
-                
+    # 获取节点名字，并剥除开头的下划线（处理 __dot1 变成 dot1 的情况）
+    clean_name = item.name().lstrip('_')
     
-                # set setDisplayFlag
-                objm.setRenderFlag(True)
-                objm.setDisplayFlag(True)
-                #n.setRenderFlag(False)
-
-
-        if n.networkItemType() == hou.networkItemType.NetworkDot:
-            #print(f"选中的是 NetworkDot: {n.path()}")
-            # create null 
-            null = hou.node(root).createNode('null',"Out" + "{0}".format(n.name()))
+    # 组合名字，确保只有一个下划线
+    null_name = f"Out_{clean_name}{suffix}"
+    
+    # 创建节点
+    null = parent.createNode('null', null_name)
+    
+    # 计算位置
+    pos = item.position()
+    offset_x = (port_index - (total_ports - 1) / 2.0) * 1.5 if total_ports > 1 else 0
+    
+    # 针对 Dot 节点做特殊偏移微调
+    if item.networkItemType() == hou.networkItemType.NetworkDot:
+        offset_x -= 0.5 
         
-            # Setting node position
-            selNodePos = n.position()
-            null.setPosition(hou.Vector2(selNodePos[0]-0.5, selNodePos[1]-1))
+    null.setPosition(hou.Vector2(pos[0] + offset_x, pos[1] - 1.0))
+    
+    # 外观设置
+    null.setUserData("nodeshape", "squared") 
+    if hasattr(item, "color"): 
+        null.setColor(item.color())
         
-            # set input 
-            null.setInput(0, n)
+    # --- 区分 Node 和 Dot 获取连线的方式 ---
+    connections_to_reconnect = []
+    if item.networkItemType() == hou.networkItemType.NetworkDot:
+        # Dot 没有多个端口，直接获取所有连线
+        connections_to_reconnect = item.outputConnections()
+    elif item.networkItemType() == hou.networkItemType.Node:
+        # Node 按特定端口抓取连线
+        if port_index < len(item.outputConnectors()):
+            connections_to_reconnect = item.outputConnectors()[port_index]
             
-            # set output / pin dot output
-            for conn in n.outputConnections():
-                out_node = conn.outputNode()
-                out_item = conn.outputItem()
-                merge_input_index = conn.inputIndex()
-                if out_node:
-                    #print(f"  - Output Node: {out_node.path()}")
-                    out_node.setInput(merge_input_index, null)
-                    
+    # 输出重定向
+    for conn in connections_to_reconnect:
+        out_node = conn.outputNode()
+        out_item = conn.outputItem()
+        input_idx = conn.inputIndex()
+        
+        if out_node:
+            out_node.setInput(input_idx, null)
+        elif isinstance(out_item, hou.NetworkDot):
+            out_item.setInput(input_idx, null)
+                
+    # --- 区分 Node 和 Dot 设置输入的方式 ---
+    if item.networkItemType() == hou.networkItemType.NetworkDot:
+        null.setInput(0, item) # Dot 不需要传递 port_index
+    else:
+        null.setInput(0, item, port_index)
+        
+    null.setSelected(True)
+    
+    return null
+
+
+def mlib_create_null_objm():
+    selected_items = hou.selectedItems()
+    if not selected_items:
+        return 
+
+    with hou.undos.group("Create Nulls and Object Merges"):
+        for item in selected_items:
+            parent = item.parent()
+            item.setSelected(False) 
+            item_type = item.networkItemType()
+
+            # --- 场景 1: 选中的是 NetworkDot ---
+            if item_type == hou.networkItemType.NetworkDot:
+                _create_out_null(parent, item, port_index=0, total_ports=1)
+                continue 
+
+            # --- 场景 2: 选中的是 Node ---
+            if item_type == hou.networkItemType.Node:
+                if item.type().name() != "null":
+                    num_ports = max(1, len(item.outputConnectors()))
+                    for port_index in range(num_ports):
+                        _create_out_null(parent, item, port_index, num_ports)
+                        
                 else:
-                    if isinstance(out_item, hou.NetworkDot):
-                        #print(f"  - Output Pin Dot: {out_item.path()}")
-                        merge_input_index = conn.inputIndex()
-                        out_item.setInput(merge_input_index, null)
-                        
-
-            # set input 
-            null.setInput(0, n)
-
-
-            # set selected
-            n.setSelected(False)
-            null.setSelected(True)
+                    objm = parent.createNode('object_merge', f"OBJM_{item.name()}")
+                    pos = item.position()
+                    objm.setPosition(hou.Vector2(pos[0], pos[1] - 1))
+                    
+                    objm.parm("objpath1").set(item.path())
+                    objm.parm("xformtype").set(1) 
+                    
+                    shape = item.userData("nodeshape") or "rect"
+                    objm.setUserData("nodeshape", shape) 
+                    objm.setColor(item.color())
             
-            # set display flag
-            #null.setRenderFlag(True)
-            #null.setDisplayFlag(True)
-            #n.setDisplayFlag(False)
-            #n.setRenderFlag(False)
-
-
-
+                    objm.setSelected(True)
+                    objm.setRenderFlag(True)
+                    objm.setDisplayFlag(True)
 
 def MlibExtractPath():
     # get path attribute name
