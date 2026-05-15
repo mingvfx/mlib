@@ -38,7 +38,7 @@ A UI-driven system for saving, sharing, and loading Houdini node networks as `.c
 
 ### Features
 
-#### H19 & H20 Auto-Compatibility
+#### H19 & H21 Auto-Compatibility
 Dynamically loads:
 - PySide2
 - PySide6
@@ -86,29 +86,7 @@ We recommend using Houdini's Packages system. This keeps your core preferences c
 
 ---
 
-## 1. Repository Structure
-
-Clone or extract this repository to a permanent location on your drive or network server.
-
-Example:
-```plaintext
-D:/Pipeline/Mlib_Toolkit
-```
-
-Ensure the folder structure is organized like this:
-
-```plaintext
-Mlib_Toolkit/
-├── scripts/
-│   └── python/
-│       ├── mlib_script.py
-│       └── cpio_manager.py
-└── (other files)
-```
-
----
-
-## 2. Create the Package JSON
+## 1. Create the Package JSON
 
 Navigate to your Houdini user preferences directory:
 
@@ -127,7 +105,7 @@ Documents/houdiniXX.X/packages/
 Inside the `packages` folder, create a new text file named:
 
 ```plaintext
-mlib_toolkit.json
+mlib.json
 ```
 
 Paste the following configuration and make sure to change the `MLIB_ROOT` path to your actual repository directory:
@@ -136,7 +114,7 @@ Paste the following configuration and make sure to change the `MLIB_ROOT` path t
 {
     "env": [
         {
-            "MLIB_ROOT": "D:/Pipeline/Mlib_Toolkit"
+            "MLIB_ROOT": "D:/Pipeline/mlib"
         },
         {
             "HOUDINI_PATH": "$MLIB_ROOT"
@@ -147,93 +125,6 @@ Paste the following configuration and make sure to change the `MLIB_ROOT` path t
 
 > **Note:** Always use forward slashes `/` in Houdini package paths, even on Windows.
 
----
-
-## 3. Shelf Tools Setup
-
-Now that the package is loaded, Houdini will automatically find the Python scripts.
-
-You can create shelf buttons with the following code:
-
-### Example: CPIO Manager UI
-
-```python
-import cpio_manager
-
-# Use importlib.reload(cpio_manager) during development if needed
-cpio_manager.show_paste_ui()
-```
-
-### Example: Smart Null Generator
-
-> Important: Name the internal name of this shelf tool `Mlib_CreateNull` to match the hotkey configuration.
-
-```python
-import mlib_script
-
-mlib_script.create_null_objm()
-```
-
----
-
-## 4. File Cache Auto-Backup Setup
-
-Paste the backup script directly into the:
-- Pre-Render Script
-- or Pre-Frame Script
-
-field of your File Cache node.
-
-Also ensure the script language is set to:
-
-```plaintext
-Python
-```
-
----
-
-## 5. Custom Hotkeys Configuration
-
-This toolkit includes a custom hotkey configuration binding the `M` key in the Network Editor to the Smart Null generator.
-
-### To install the hotkey
-
-1. Open Houdini
-2. Go to:
-
-```plaintext
-Edit > Hotkeys
-```
-
-You can either:
-- Manually assign the `M` key to your newly created `Mlib_CreateNull` shelf tool
-- OR merge the provided JSON snippet into your:
-
-```plaintext
-<HOUDINI_USER_PREF_DIR>/default.hotkeys
-```
-
-file.
-
-```json
-{
-    "name":"Houdini",
-    "version":2,
-    "houdini.version":"20.5.332",
-    "symbol":"",
-    "contexts":[
-        {
-            "symbol":"h.pane.wsheet",
-            "bindings":[
-                {
-                    "action":"h.pane.wsheet.tool:Mlib_CreateNull",
-                    "keys":["M"]
-                }
-            ]
-        }
-    ]
-}
-```
 
 ---
 

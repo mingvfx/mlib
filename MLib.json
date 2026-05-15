@@ -1,4 +1,10 @@
 {
-    "path": "D:/Projects/VFX/Mlib"
+    "env": [
+        {
+            "MLIB_ROOT": "D:/Pipeline/Mlib_Toolkit"
+        },
+        {
+            "HOUDINI_PATH": "$MLIB_ROOT"
+        }
+    ]
 }
-
