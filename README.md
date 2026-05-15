@@ -56,7 +56,7 @@ Configure multiple local or network paths to browse shared node packages in a cl
 
 ---
 
-## 3. Cache Auto-Backup (`backup_cache.py`)
+## 3. Cache Auto-Backup (`backup_file.py`)
 
 A fail-safe pipeline script designed to execute before a File Cache or ROP writes to disk.
 
