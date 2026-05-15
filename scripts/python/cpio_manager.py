@@ -41,11 +41,9 @@ def copy_selected_nodes():
         hou.ui.displayMessage("Please select nodes to copy first!", severity=hou.severityType.Warning)
         return
 
-    # Use the first path from user's settings as the save directory
     current_paths = load_paths()
     save_dir = current_paths[0] if current_paths else DEFAULT_PATH
 
-    # Ensure directory exists
     if not os.path.exists(save_dir):
         try:
             os.makedirs(save_dir)
@@ -53,7 +51,6 @@ def copy_selected_nodes():
             hou.ui.displayMessage(f"Failed to create folder: {e}", severity=hou.severityType.Error)
             return
             
-    # Ask for a name
     button_idx, input_str = hou.ui.readInput(
         f"Saving to: {save_dir}\n\nPlease enter a name for this node package:\n(The system will automatically prepend the timestamp)",
         buttons=('Save', 'Cancel'),
@@ -62,19 +59,14 @@ def copy_selected_nodes():
     )
     
     if button_idx == 0 and input_str.strip():
-        # Sanitize and assemble filename
         safe_name = re.sub(r'[\\/*?:"<>|]', "", input_str.strip()).replace(" ", "_")
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         file_name = f"{timestamp}_{safe_name}.cpio"
         file_path = os.path.join(save_dir, file_name)
         
-        # Save CPIO to disk
         parent = nodes[0].parent()
         parent.saveItemsToFile(nodes, file_path)
 
-        # ==========================================
-        # NEW: Save Sidecar JSON Metadata
-        # ==========================================
         metadata = {
             "context_path": parent.path(),
             "node_count": len(nodes),
@@ -85,7 +77,7 @@ def copy_selected_nodes():
             with open(json_path, 'w') as jf:
                 json.dump(metadata, jf, indent=4)
         except:
-            pass # Failsafe: Ignore if metadata write fails
+            pass 
         
         hou.ui.displayMessage(f"Packaged successfully!\nFile saved as: {file_name}")
         
@@ -111,7 +103,6 @@ class SettingsDialog(QtWidgets.QDialog):
         self.list_widget.addItems(self.paths)
         layout.addWidget(self.list_widget)
 
-        # Bottom Action Layout
         bottom_layout = QtWidgets.QHBoxLayout()
 
         self.btn_add = QtWidgets.QPushButton()
@@ -162,7 +153,7 @@ class CleanListDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super(CleanListDialog, self).__init__(parent)
         self.setWindowTitle("Select Nodes to Paste")
-        self.resize(650, 400) # Widened slightly to accommodate the context path
+        self.resize(660, 900) # defaule size
 
         self.selected_file_path = None
         self.file_mapping = {}
@@ -182,17 +173,27 @@ class CleanListDialog(QtWidgets.QDialog):
         self.btn_settings.setToolTip("Configure CPIO Scan Folders")
         self.btn_settings.setFixedSize(28, 28)
 
+        # ==========================================
+        # REVERTED: Using native BUTTONS_minus icon
+        # ==========================================
+        self.btn_delete = QtWidgets.QPushButton()
+        self.btn_delete.setIcon(hou.qt.Icon("BUTTONS_minus")) 
+        self.btn_delete.setToolTip("Delete Selected Package")
+        self.btn_delete.setFixedSize(28, 28)
+
         self.btn_accept = QtWidgets.QPushButton("Accept")
         self.btn_cancel = QtWidgets.QPushButton("Cancel")
         self.btn_accept.setDefault(True)
 
         btn_layout.addWidget(self.btn_settings)
+        btn_layout.addWidget(self.btn_delete) 
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_accept)
         btn_layout.addWidget(self.btn_cancel)
         layout.addLayout(btn_layout)
 
         self.btn_settings.clicked.connect(self.open_settings)
+        self.btn_delete.clicked.connect(self.delete_selected_package) 
         self.btn_accept.clicked.connect(self.accept_selection)
         self.btn_cancel.clicked.connect(self.reject)
         self.list_widget.itemDoubleClicked.connect(self.accept_selection)
@@ -204,6 +205,41 @@ class CleanListDialog(QtWidgets.QDialog):
         dialog_exec = getattr(dialog, 'exec_', dialog.exec)
         if dialog_exec():
             self.refresh_list()
+
+    def delete_selected_package(self):
+        current_item = self.list_widget.currentItem()
+        if not current_item or "No .cpio files found" in current_item.text():
+            QtWidgets.QMessageBox.warning(self, "Warning", "Please select a package to delete.")
+            return
+
+        display_text = current_item.text()
+        cpio_path = self.file_mapping.get(display_text)
+
+        if not cpio_path or not os.path.exists(cpio_path):
+            QtWidgets.QMessageBox.critical(self, "Error", "File not found or already deleted.")
+            return
+
+        file_name = os.path.basename(cpio_path)
+        
+        # Safe Qt native modal dialog
+        reply = QtWidgets.QMessageBox.warning(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to permanently delete this package?\n\n{file_name}",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Cancel # Default safety focus
+        )
+
+        if reply == QtWidgets.QMessageBox.Yes:
+            json_path = cpio_path.replace(".cpio", ".json")
+            try:
+                os.remove(cpio_path)
+                if os.path.exists(json_path):
+                    os.remove(json_path)
+                self.refresh_list()
+            except Exception as e:
+                QtWidgets.QMessageBox.critical(self, "Error", f"Failed to delete file: {e}")
+
 
     def refresh_list(self):
         self.list_widget.clear()
@@ -217,9 +253,6 @@ class CleanListDialog(QtWidgets.QDialog):
                     if f.endswith('.cpio'):
                         fp = os.path.join(d, f)
                         
-                        # ==========================================
-                        # NEW: Attempt to read Sidecar JSON
-                        # ==========================================
                         context_path = ""
                         json_path = fp.replace(".cpio", ".json")
                         if os.path.exists(json_path):
@@ -234,7 +267,7 @@ class CleanListDialog(QtWidgets.QDialog):
                             'abs_path': fp,
                             'name': f,
                             'mtime': os.path.getmtime(fp),
-                            'context': context_path # Store context for display
+                            'context': context_path 
                         })
 
         if not all_files_data:
@@ -246,13 +279,10 @@ class CleanListDialog(QtWidgets.QDialog):
         for item in all_files_data:
             time_str = datetime.datetime.fromtimestamp(item['mtime']).strftime('%Y-%m-%d %H:%M:%S')
             
-            # ==========================================
-            # NEW: Format display text with context
-            # ==========================================
             if item['context']:
                 display_text = f"{time_str}  |  [{item['context']}]  |  {item['name']}"
             else:
-                display_text = f"{time_str}  |  {item['name']}" # Fallback for old files
+                display_text = f"{time_str}  |  {item['name']}" 
                 
             self.list_widget.addItem(display_text)
             self.file_mapping[display_text] = item['abs_path']
@@ -263,7 +293,7 @@ class CleanListDialog(QtWidgets.QDialog):
             self.selected_file_path = self.file_mapping.get(current_item.text())
             self.accept()
         else:
-            hou.ui.displayMessage("Please select a valid node package!", severity=hou.severityType.Warning)
+            QtWidgets.QMessageBox.warning(self, "Warning", "Please select a valid node package!")
 
 
 # ==========================================
