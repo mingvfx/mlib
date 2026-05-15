@@ -9,7 +9,8 @@ A collection of robust Python tools and workflow enhancements designed to stream
 ## 1. Network Automation (`mlib_script.py`)
 
 A suite of functions to automate tedious node networking, grouping, and setup tasks.
-
+### Mlib Shot setup (`create_shot_setup`)
+This script is used to configure the project’s basic details, such as the project name, shot number, frame range, and so on.
 ### Smart Null & Object Merge (`create_null_objm`)
 Instantly creates formatted output Nulls or Object Merges based on node selection.
 
@@ -62,6 +63,7 @@ A fail-safe pipeline script designed to execute before a File Cache or ROP write
 
 ### Snapshot Versioning
 Automatically:
+- filecache - Advanced - Script - Pre-Render script - /xxx/backup_file.py
 - Saves your current `.hip` file
 - Creates a timestamped copy
 
@@ -86,7 +88,7 @@ We recommend using Houdini's Packages system. This keeps your core preferences c
 
 ---
 
-## 1. Create the Package JSON
+## 1. Replace path of Package JSON
 
 Navigate to your Houdini user preferences directory:
 
@@ -100,13 +102,9 @@ Documents/houdiniXX.X/packages/
 ~/houdiniXX.X/packages/
 ```
 
+
+copy `mlib.json` file to doc/houdinixx.x/packages/
 > If the `packages` folder does not exist, simply create it.
-
-Inside the `packages` folder, create a new text file named:
-
-```plaintext
-mlib.json
-```
 
 Paste the following configuration and make sure to change the `MLIB_ROOT` path to your actual repository directory:
 
