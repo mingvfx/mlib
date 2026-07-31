@@ -1,0 +1,29 @@
+{
+    "name": "xm",
+    "theme": {
+        "base": [
+            280,
+            0.0,
+            18
+        ],
+        "primary": [
+            277.0,
+            45.0,
+            75.0
+        ],
+        "highlight": [
+            82,
+            60,
+            80
+        ],
+        "uncheckedUseField": true,
+        "tabsUsePrimary": true,
+        "iconsUsePrimary": false,
+        "textAdjust": 5.0,
+        "buttonAdjust": -10.0,
+        "fieldAdjust": -30.0,
+        "secondaryChromaScale": 0.2,
+        "iconAccentChromaScale": 0.0,
+        "category": "Custom"
+    }
+}

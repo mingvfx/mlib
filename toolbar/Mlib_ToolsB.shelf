@@ -55,7 +55,7 @@ mlib_script.geo_to_rs()
 ]]></script>
   </tool>
 
-  <tool name="mlibshotsetup" label="Mlib ShotSetup" icon="opdef:/Mlib::Object/Mlib_ShotSetup::1.1?IconSVG">
+  <tool name="mlibshotsetup" label="Mlib ShotSetup" icon="CROWDS_agentclip">
     <script scriptType="python"><![CDATA[import importlib
 import mlib_script
 
