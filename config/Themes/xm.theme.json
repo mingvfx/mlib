@@ -20,7 +20,7 @@
         "tabsUsePrimary": true,
         "iconsUsePrimary": false,
         "textAdjust": 5.0,
-        "buttonAdjust": -10.0,
+        "buttonAdjust": -5.0,
         "fieldAdjust": -30.0,
         "secondaryChromaScale": 0.2,
         "iconAccentChromaScale": 0.0,
