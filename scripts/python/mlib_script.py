@@ -12,106 +12,425 @@ def create_shot_setup():
     mlibshotsetup = obj_level.createNode("Mlib_ShotSetup")
         
 
+COP_CATEGORY_NAMES = {"Cop", "Cop2"}
+
+# COP：从左向右排列
+COP_X_GAP = 3.0       # 新节点位于原节点右侧的距离
+COP_Y_GAP = 2.5       # 多输出 Null 之间的垂直间距
+
+# SOP：从上向下排列
+SOP_X_GAP = 1.5       # 多输出 Null 之间的水平间距
+SOP_Y_GAP = 1.0       # 新节点位于原节点下方的距离
+
+
+def _category_name(node):
+    """
+    返回节点所属类别，例如：
+    Sop、Cop、Cop2
+    """
+    return node.type().category().name()
+
+
 def _create_out_null(parent, item, port_index, total_ports):
     """
-    内部辅助函数：专门用来生成 Null 节点并处理连线
+    创建 Null，并将指定输出端口原有的下游连线
+    重定向到新创建的 Null。
     """
     suffix = f"_{port_index}" if total_ports > 1 else ""
-    
-    # 获取节点名字，并剥除开头的下划线（处理 __dot1 变成 dot1 的情况）
-    clean_name = item.name().lstrip('_')
-    
-    # 组合名字，确保只有一个下划线
+    clean_name = item.name().lstrip("_")
     null_name = f"Out_{clean_name}{suffix}"
-    
-    # 创建节点
-    null = parent.createNode('null', null_name)
-    
-    # 计算位置
+
+    # 创建 Null
+    null = parent.createNode(
+        "null",
+        null_name
+    )
+
+    # ========================================================
+    # 计算节点位置
+    # ========================================================
+
     pos = item.position()
-    offset_x = (port_index - (total_ports - 1) / 2.0) * 1.5 if total_ports > 1 else 0
-    
-    # 针对 Dot 节点做特殊偏移微调
-    if item.networkItemType() == hou.networkItemType.NetworkDot:
-        offset_x -= 0.5 
-        
-    null.setPosition(hou.Vector2(pos[0] + offset_x, pos[1] - 1.0))
-    
-    # 外观设置
-    null.setUserData("nodeshape", "squared") 
-    if hasattr(item, "color"): 
+
+    network_category = parent.childTypeCategory().name()
+    is_cop = network_category in COP_CATEGORY_NAMES
+
+    if is_cop:
+        # ----------------------------------------------------
+        # COP
+        # 节点统一放在原节点右侧。
+        # 如果有多个输出，则沿 Y 轴从上到下排列。
+        # ----------------------------------------------------
+
+        target_x = pos[0] + COP_X_GAP
+
+        offset_y = (
+            ((total_ports - 1) / 2.0 - port_index)
+            * COP_Y_GAP
+            if total_ports > 1
+            else 0
+        )
+
+        null.setPosition(
+            hou.Vector2(
+                target_x,
+                pos[1] + offset_y
+            )
+        )
+
+    else:
+        # ----------------------------------------------------
+        # SOP
+        # 节点统一放在原节点下方。
+        # 如果有多个输出，则沿 X 轴从左到右排列。
+        # ----------------------------------------------------
+
+        offset_x = (
+            (
+                port_index
+                - (total_ports - 1) / 2.0
+            )
+            * SOP_X_GAP
+            if total_ports > 1
+            else 0
+        )
+
+        # Network Dot 的位置微调
+        if (
+            item.networkItemType()
+            == hou.networkItemType.NetworkDot
+        ):
+            offset_x -= 0.5
+
+        null.setPosition(
+            hou.Vector2(
+                pos[0] + offset_x,
+                pos[1] - SOP_Y_GAP
+            )
+        )
+
+    # ========================================================
+    # 外观
+    # ========================================================
+
+    null.setUserData(
+        "nodeshape",
+        "squared"
+    )
+
+    if hasattr(item, "color"):
         null.setColor(item.color())
-        
-    # --- 区分 Node 和 Dot 获取连线的方式 ---
-    connections_to_reconnect = []
-    if item.networkItemType() == hou.networkItemType.NetworkDot:
-        # Dot 没有多个端口，直接获取所有连线
-        connections_to_reconnect = item.outputConnections()
-    elif item.networkItemType() == hou.networkItemType.Node:
-        # Node 按特定端口抓取连线
-        if port_index < len(item.outputConnectors()):
-            connections_to_reconnect = item.outputConnectors()[port_index]
-            
-    # 输出重定向
+
+    # ========================================================
+    # 获取需要重新连接的下游连线
+    # ========================================================
+
+    if (
+        item.networkItemType()
+        == hou.networkItemType.NetworkDot
+    ):
+        connections_to_reconnect = tuple(
+            item.outputConnections()
+        )
+
+    elif (
+        item.networkItemType()
+        == hou.networkItemType.Node
+    ):
+        connectors = item.outputConnectors()
+
+        if port_index < len(connectors):
+            connections_to_reconnect = tuple(
+                connectors[port_index]
+            )
+        else:
+            connections_to_reconnect = ()
+
+    else:
+        connections_to_reconnect = ()
+
+    # ========================================================
+    # 将原来的下游节点改接到 Null
+    # ========================================================
+
     for conn in connections_to_reconnect:
         out_node = conn.outputNode()
         out_item = conn.outputItem()
-        input_idx = conn.inputIndex()
-        
-        if out_node:
-            out_node.setInput(input_idx, null)
-        elif isinstance(out_item, hou.NetworkDot):
-            out_item.setInput(input_idx, null)
-                
-    # --- 区分 Node 和 Dot 设置输入的方式 ---
-    if item.networkItemType() == hou.networkItemType.NetworkDot:
-        null.setInput(0, item) # Dot 不需要传递 port_index
+        input_index = conn.inputIndex()
+
+        if out_node is not None:
+            out_node.setInput(
+                input_index,
+                null
+            )
+
+        elif isinstance(
+            out_item,
+            hou.NetworkDot
+        ):
+            out_item.setInput(
+                input_index,
+                null
+            )
+
+    # ========================================================
+    # Null 连接到原节点
+    # ========================================================
+
+    if (
+        item.networkItemType()
+        == hou.networkItemType.NetworkDot
+    ):
+        null.setInput(
+            0,
+            item
+        )
+
     else:
-        null.setInput(0, item, port_index)
-        
+        null.setInput(
+            0,
+            item,
+            port_index
+        )
+
     null.setSelected(True)
-    
+
     return null
 
 
-def create_null_objm():
-    selected_items = hou.selectedItems()
-    if not selected_items:
-        return 
+def _create_reference_from_null(parent, item):
+    """
+    根据 Null 所在网络创建引用节点：
 
-    with hou.undos.group("Create Nulls and Object Merges"):
+    SOP Null -> Object Merge
+    COP Null -> Fetch
+    """
+    category_name = _category_name(item)
+    pos = item.position()
+
+    # ========================================================
+    # COP：创建 Fetch
+    # ========================================================
+
+    if category_name in COP_CATEGORY_NAMES:
+        reference = parent.createNode(
+            "fetch",
+            f"FETCH_{item.name()}"
+        )
+
+        # 新 Copernicus 使用 coppath
+        # 旧 COP2 使用 oppath
+        path_parm = (
+            reference.parm("coppath")
+            or reference.parm("oppath")
+        )
+
+        if path_parm is None:
+            reference.destroy()
+
+            raise RuntimeError(
+                "找不到 Fetch 节点的 "
+                "coppath 或 oppath 参数"
+            )
+
+        path_parm.set(item.path())
+
+        # Copernicus Fetch：
+        # 让 Fetch 的输出类型匹配目标 COP
+        set_ports_parm = reference.parm(
+            "setports"
+        )
+
+        if set_ports_parm is not None:
+            set_ports_parm.pressButton()
+
+        # Fetch 放在 Null 右侧
+        reference.setPosition(
+            hou.Vector2(
+                pos[0] + COP_X_GAP,
+                pos[1]
+            )
+        )
+
+    # ========================================================
+    # SOP：创建 Object Merge
+    # ========================================================
+
+    elif category_name == "Sop":
+        reference = parent.createNode(
+            "object_merge",
+            f"OBJM_{item.name()}"
+        )
+
+        reference.parm(
+            "objpath1"
+        ).set(
+            item.path()
+        )
+
+        reference.parm(
+            "xformtype"
+        ).set(1)
+
+        # Object Merge 放在 Null 下方
+        reference.setPosition(
+            hou.Vector2(
+                pos[0],
+                pos[1] - SOP_Y_GAP
+            )
+        )
+
+    # 其他网络暂不处理
+    else:
+        return None
+
+    # ========================================================
+    # 外观
+    # ========================================================
+
+    shape = (
+        item.userData("nodeshape")
+        or "rect"
+    )
+
+    reference.setUserData(
+        "nodeshape",
+        shape
+    )
+
+    reference.setColor(
+        item.color()
+    )
+
+    reference.setSelected(True)
+
+    # 显示标记
+    if hasattr(
+        reference,
+        "setDisplayFlag"
+    ):
+        reference.setDisplayFlag(True)
+
+    # 新版 hou.CopNode 没有 setRenderFlag
+    if hasattr(
+        reference,
+        "setRenderFlag"
+    ):
+        reference.setRenderFlag(True)
+
+    return reference
+
+
+def create_null_objm():
+    """
+    主函数：
+
+    选择普通节点：
+        创建输出 Null。
+
+    选择 Null：
+        SOP 中创建 Object Merge。
+        COP 中创建 Fetch。
+
+    选择 Network Dot：
+        创建输出 Null。
+    """
+    selected_items = hou.selectedItems()
+
+    if not selected_items:
+        return
+
+    with hou.undos.group(
+        "Create Nulls and Reference Nodes"
+    ):
         for item in selected_items:
             parent = item.parent()
-            item.setSelected(False) 
+
+            item.setSelected(False)
+
             item_type = item.networkItemType()
 
-            # --- 场景 1: 选中的是 NetworkDot ---
-            if item_type == hou.networkItemType.NetworkDot:
-                _create_out_null(parent, item, port_index=0, total_ports=1)
-                continue 
+            # =================================================
+            # 场景 1：Network Dot
+            # =================================================
 
-            # --- 场景 2: 选中的是 Node ---
-            if item_type == hou.networkItemType.Node:
-                if item.type().name() != "null":
-                    num_ports = max(1, len(item.outputConnectors()))
-                    for port_index in range(num_ports):
-                        _create_out_null(parent, item, port_index, num_ports)
-                        
-                else:
-                    objm = parent.createNode('object_merge', f"OBJM_{item.name()}")
-                    pos = item.position()
-                    objm.setPosition(hou.Vector2(pos[0], pos[1] - 1))
-                    
-                    objm.parm("objpath1").set(item.path())
-                    objm.parm("xformtype").set(1) 
-                    
-                    shape = item.userData("nodeshape") or "rect"
-                    objm.setUserData("nodeshape", shape) 
-                    objm.setColor(item.color())
-            
-                    objm.setSelected(True)
-                    objm.setRenderFlag(True)
-                    objm.setDisplayFlag(True)
+            if (
+                item_type
+                == hou.networkItemType.NetworkDot
+            ):
+                _create_out_null(
+                    parent,
+                    item,
+                    port_index=0,
+                    total_ports=1
+                )
+
+                continue
+
+            # 非 Node、非 Network Dot 不处理
+            if (
+                item_type
+                != hou.networkItemType.Node
+            ):
+                continue
+
+            node_type_name = item.type().name()
+            category_name = _category_name(item)
+
+            # =================================================
+            # 场景 2：选择 Null
+            # =================================================
+
+            if node_type_name == "null":
+                _create_reference_from_null(
+                    parent,
+                    item
+                )
+
+                continue
+
+            # =================================================
+            # 场景 3：选择 COP Fetch
+            #
+            # Fetch 只处理第 0 个输出，
+            # 防止创建大量 Null。
+            # =================================================
+
+            if (
+                category_name
+                in COP_CATEGORY_NAMES
+                and node_type_name == "fetch"
+            ):
+                port_indices = [0]
+
+            else:
+                # 当前实际暴露的输出数量
+                num_outputs = len(
+                    item.outputNames()
+                )
+
+                if num_outputs == 0:
+                    continue
+
+                port_indices = list(
+                    range(num_outputs)
+                )
+
+            total_ports = len(
+                port_indices
+            )
+
+            # =================================================
+            # 为每个输出端口创建 Null
+            # =================================================
+
+            for port_index in port_indices:
+                _create_out_null(
+                    parent,
+                    item,
+                    port_index,
+                    total_ports
+                )
 
 def extract_path():
     # get path attribute name
