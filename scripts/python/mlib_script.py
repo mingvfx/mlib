@@ -12,6 +12,13 @@ def create_shot_setup():
     mlibshotsetup = obj_level.createNode("Mlib_ShotSetup")
         
 
+import hou
+
+
+# ============================================================
+# 节点间距设置
+# ============================================================
+
 COP_CATEGORY_NAMES = {"Cop", "Cop2"}
 
 # COP：从左向右排列
@@ -431,6 +438,8 @@ def create_null_objm():
                     port_index,
                     total_ports
                 )
+
+
 
 def extract_path():
     # get path attribute name
